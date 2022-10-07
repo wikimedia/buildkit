@@ -15,8 +15,10 @@ import (
 	distreference "github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/source"
+	log "github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/version"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
 )
 
 // DefaultPool is the default shared resolver pool instance
@@ -81,15 +83,27 @@ func (p *Pool) GetResolver(hosts docker.RegistryHosts, ref, scope string, sm *se
 		name = named.Name()
 	}
 
-	key := fmt.Sprintf("%s::%s", name, scope)
+	// Index the authHandlerNS cache by session id(s) as well to prevent tokens
+	// from leaking between client sessions. The key will end up looking
+	// something like 'wujskoey891qc5cv1edd3yj3p::repository:foo/bar::pull,push'
+	key := fmt.Sprintf("%s::%s::%s", strings.Join(session.AllSessionIDs(g), ":"), name, scope)
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	h, ok := p.m[key]
+
 	if !ok {
 		h = newAuthHandlerNS(sm)
 		p.m[key] = h
 	}
+
+	log.G(context.TODO()).WithFields(logrus.Fields{
+		"name":   name,
+		"scope":  scope,
+		"key":    key,
+		"cached": ok,
+	}).Debugf("checked for cached auth handler namespace")
+
 	return newResolver(hosts, h, sm, g)
 }
 
