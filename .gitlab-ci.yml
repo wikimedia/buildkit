@@ -1,0 +1,24 @@
+stages:
+  - build-and-publish
+
+build-and-publish-buildkitd:
+  stage: build-and-publish
+  image: docker-registry.wikimedia.org/releng/buildctl:0.10.4-4
+  variables:
+    http_proxy: "http://webproxy:8080"
+    https_proxy: "http://webproxy:8080"
+    no_proxy: "127.0.0.1,::1,localhost,.wmnet,.wikimedia.org,.wikipedia.org,.wikibooks.org,.wikiquote.org,.wiktionary.org,.wikisource.org,.wikispecies.org,.wikiversity.org,.wikidata.org,.mediawiki.org,.wikinews.org,.wikivoyage.org"
+  script:
+    - mkdir ~/.docker
+    - |
+      echo "$CI_JOB_JWT" | jq --raw-input '{ auths: { "docker-registry.discovery.wmnet": { registrytoken: . } } }' > ~/.docker/config.json
+    - REVISION=$(cat wmf/REVISION)
+    - wmf/build.sh
+      --opt build-arg:http_proxy="$http_proxy"
+      --opt build-arg:https_proxy="$https_proxy"
+      --opt build-arg:no_proxy="$no_proxy"
+      --output type=image,name="docker-registry.discovery.wmnet/repos/releng/buildkit:${CI_COMMIT_BRANCH}-${REVISION}",push=true
+  tags:
+    - protected
+  rules:
+    - if: $CI_COMMIT_BRANCH == "wmf/v0.10"
