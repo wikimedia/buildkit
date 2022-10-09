@@ -12,12 +12,12 @@ build-and-publish-buildkitd:
     - mkdir ~/.docker
     - |
       echo "$CI_JOB_JWT" | jq --raw-input '{ auths: { "docker-registry.discovery.wmnet": { registrytoken: . } } }' > ~/.docker/config.json
-    - REVISION=$(cat wmf/REVISION)
+    - IMAGE_TAG=$(printf "%s-%s" "${CI_COMMIT_BRANCH}" "$(cat wmf/REVISION)" | tr -c 'a-zA-Z0-9_.-' - | cut -c -128)
     - wmf/build.sh
       --opt build-arg:http_proxy="$http_proxy"
       --opt build-arg:https_proxy="$https_proxy"
       --opt build-arg:no_proxy="$no_proxy"
-      --output type=image,name="docker-registry.discovery.wmnet/repos/releng/buildkit:${CI_COMMIT_BRANCH}-${REVISION}",push=true
+      --output type=image,name="docker-registry.discovery.wmnet/repos/releng/buildkit:${IMAGE_TAG}",push=true
   tags:
     - protected
   rules:
