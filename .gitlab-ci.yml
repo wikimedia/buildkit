@@ -10,6 +10,9 @@ build-and-publish-buildkitd:
   #   https_proxy: "http://webproxy:8080"
   #   no_proxy: "127.0.0.1,::1,localhost,.wmnet,.wikimedia.org,.wikipedia.org,.wikibooks.org,.wikiquote.org,.wiktionary.org,.wikisource.org,.wikispecies.org,.wikiversity.org,.wikidata.org,.mediawiki.org,.wikinews.org,.wikivoyage.org"
   script:
+    - echo "Proxy-related environment variables:"
+    - env | grep -i proxy
+    - echo BUILDKIT_HOST is $BUILDKIT_HOST
     - mkdir ~/.docker
     - |
       echo "$CI_JOB_JWT" | jq --raw-input '{ auths: { "docker-registry.discovery.wmnet": { registrytoken: . } } }' > ~/.docker/config.json
