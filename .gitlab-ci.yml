@@ -4,11 +4,13 @@ stages:
 build-and-publish-buildkitd:
   stage: build-and-publish
   image: docker-registry.wikimedia.org/releng/buildctl:0.10.4-4
-  variables:
-    http_proxy: "http://webproxy:8080"
-    https_proxy: "http://webproxy:8080"
-    no_proxy: "127.0.0.1,::1,localhost,.wmnet,.wikimedia.org,.wikipedia.org,.wikibooks.org,.wikiquote.org,.wiktionary.org,.wikisource.org,.wikispecies.org,.wikiversity.org,.wikidata.org,.mediawiki.org,.wikinews.org,.wikivoyage.org"
+  # variables:
+  #   http_proxy: "http://webproxy:8080"
+  #   https_proxy: "http://webproxy:8080"
+  #   no_proxy: "127.0.0.1,::1,localhost,.wmnet,.wikimedia.org,.wikipedia.org,.wikibooks.org,.wikiquote.org,.wiktionary.org,.wikisource.org,.wikispecies.org,.wikiversity.org,.wikidata.org,.mediawiki.org,.wikinews.org,.wikivoyage.org"
   script:
+    - env
+    - exit
     - mkdir ~/.docker
     - |
       echo "$CI_JOB_JWT" | jq --raw-input '{ auths: { "docker-registry.discovery.wmnet": { registrytoken: . } } }' > ~/.docker/config.json
