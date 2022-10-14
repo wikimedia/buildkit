@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get install -yqq --no-install-recommends $PACKAGES
 
-COPY --from=rootless /usr/bin/buildkitd /usr/local/sbin/
+COPY --from=rootless /usr/bin/buildkitd /usr/bin/buildctl /usr/local/sbin/
 COPY --from=rootless /usr/bin/rootlesskit /usr/local/sbin/
 COPY wmf/entrypoint.sh /usr/local/bin/
 
