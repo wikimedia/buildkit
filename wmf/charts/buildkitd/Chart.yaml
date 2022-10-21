@@ -1,0 +1,6 @@
+apiVersion: v2
+name: buildkitd
+description: Run buildkitd rootless
+type: application
+version: 0.1.0
+appVersion: "wmf-v0.10-1"
