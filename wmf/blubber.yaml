@@ -1,0 +1,29 @@
+# syntax=docker-registry.wikimedia.org/repos/releng/blubber:v0.12.1
+version: v4
+variants:
+  helm:
+    base: docker-registry.wikimedia.org/bullseye:20221016
+    lives:
+      in: /src
+    runs:
+      insecurely: true
+    apt:
+      packages:
+        - helm3
+  helm-lint:
+    includes: [helm]
+    copies:
+      - from: local
+        source: ./wmf/charts/
+    entrypoint: [helm, lint]
+  build-helm-package:
+    includes: [helm]
+    builders:
+      - custom:
+          requirements: [./wmf/charts/]
+          command: [helm, package, ./wmf/charts/buildkitd]
+  helm-package:
+    copies:
+      - from: build-helm-package
+        source: '/src/buildkitd-*.tgz'
+        destination: /buildkitd.tgz
