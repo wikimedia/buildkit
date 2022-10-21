@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "buildkitd.fullname" . }}
+  labels:
+    {{- include "buildkitd.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "buildkitd.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "buildkitd.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "buildkitd.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --addr
+            - tcp://0.0.0.0:1234
+            - --oci-worker-no-process-sandbox
+            {{- if .Values.mtls.enabled }}
+            - --tlscacert
+            - /certs/ca.pem
+            - --tlscert
+            - /certs/cert.pem
+            - --tlskey
+            - /certs/key.pem
+            {{- end }}
+          ports:
+            - name: buildkit
+              containerPort: 1234
+              protocol: TCP
+          # the probe below will only work after Release v0.6.3
+          readinessProbe:
+            exec:
+              command:
+                - buildctl
+                - --addr
+                - tcp://127.0.0.1:1234
+                - debug
+                - workers
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          # the probe below will only work after Release v0.6.3
+          livenessProbe:
+            exec:
+              command:
+                - buildctl
+                - --addr
+                - tcp://127.0.0.1:1234
+                - debug
+                - workers
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          volumeMounts:
+            {{- if .Values.mtls.enabled }}
+            - name: mtls-certs
+              readOnly: true
+              mountPath: /certs
+            {{- end }}
+            # Dockerfile has `VOLUME /home/user/.local/share/buildkit` by default too,
+            # but the default VOLUME does not work with rootless on Google's Container-Optimized OS
+            # as it is mounted with `nosuid,nodev`.
+            # https://github.com/moby/buildkit/issues/879#issuecomment-1240347038
+            - mountPath: /home/user/.local/share/buildkit
+              name: buildkitd
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+      volumes:
+        {{- if .Values.mtls.enabled }}
+        # the mTLS secret must contain ca.pem, cert.pem, and key.pem
+        - name: mtls-certs
+          secret:
+            secretName: {{ .Values.mtls.secretName }}
+        {{- end }}
+        - name: buildkitd
+          emptyDir: {}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
