@@ -1,5 +1,16 @@
+include:
+  - project: 'repos/releng/kokkuri'
+    file: 'includes/images.yaml'
+
 stages:
+  - lint
   - build-and-publish
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED
 
 build-and-publish-buildkitd:
   stage: build-and-publish
@@ -13,7 +24,7 @@ build-and-publish-buildkitd:
     - mkdir ~/.docker
     - |
       echo "$CI_JOB_JWT" | jq --raw-input '{ auths: { "docker-registry.discovery.wmnet": { registrytoken: . } } }' > ~/.docker/config.json
-    - IMAGE_TAG=$(printf "%s-%s" "${CI_COMMIT_BRANCH}" "$(cat wmf/REVISION)" | tr -c 'a-zA-Z0-9_.-' - | cut -c -128)
+    - IMAGE_TAG=$(printf "%s" "${CI_COMMIT_REF_NAME}" | tr -c 'a-zA-Z0-9_.-' - | cut -c -128)
     - wmf/build.sh
       --opt build-arg:http_proxy="$http_proxy"
       --opt build-arg:https_proxy="$https_proxy"
@@ -22,4 +33,32 @@ build-and-publish-buildkitd:
   tags:
     - protected
   rules:
-    - if: $CI_COMMIT_BRANCH == "wmf/v0.10"
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED
+
+lint-helm-chart:
+  stage: lint
+  extends: .kokkuri:build-and-run-image
+  variables:
+    BUILD_VARIANT: helm-lint
+    BUILD_CONFIG: wmf/blubber.yaml
+    RUN_ARGUMENTS: '["wmf/charts/buildkitd"]'
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+      changes:
+        - wmf/charts/**/*
+        - wmf/blubber.yaml
+
+package-and-publish-helm-chart:
+  stage: build-and-publish
+  extends: .kokkuri:build-image
+  variables:
+    BUILD_VARIANT: helm-package
+    BUILD_CONFIG: wmf/blubber.yaml
+    BUILDCTL_BUILD_FLAGS: '--output type=local,dest=wmf/charts'
+  rules:
+    - changes:
+        - wmf/charts/**/*
+        - wmf/blubber.yaml
+  artifacts:
+    paths:
+      - wmf/charts/buildkitd.tgz
