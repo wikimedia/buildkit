@@ -45,10 +45,31 @@ spec:
             - --tlskey
             - /certs/key.pem
             {{- end }}
+
           ports:
             - name: buildkit
               containerPort: 1234
               protocol: TCP
+
+          {{- if .Values.cacheStorage.s3.enabled }}
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.cacheStorage.s3.secretName }}"
+                  key: "{{ .Values.cacheStorage.s3.accessID }}"
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.cacheStorage.s3.secretName }}"
+                  key: "{{ .Values.cacheStorage.s3.secretKey }}"
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ .Values.cacheStorage.s3.secretName }}"
+                  key: "{{ .Values.cacheStorage.s3.region }}"
+          {{- end }}
+
           # the probe below will only work after Release v0.6.3
           readinessProbe:
             exec:
