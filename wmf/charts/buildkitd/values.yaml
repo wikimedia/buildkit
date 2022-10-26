@@ -68,3 +68,24 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+cacheStorage:
+
+  # S3 credentials can be provide via a secret. buildctl clients can then do:
+  # `--export-cache type=s3,region=eu-west-1,bucket=my_bucket,name=my_image`
+  # `--import-cache type=s3,region=eu-west-1,bucket=my_bucket,name=my_image`
+  s3:
+    # Whether S3 credentials are provided to buildkitd
+    enabled: false
+
+    # The name of the secret that contains the access ID and secret key
+    secretName: ""
+
+    # The key within the above secret's data that defines the access ID value
+    accessID: "access_id"
+
+    # The key within the above secret's data that defines the secret key value
+    secretKey: "secret_key"
+
+    # The key within the above secret's data that defines the default region
+    region:  "region"
