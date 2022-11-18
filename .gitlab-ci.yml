@@ -12,6 +12,11 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED
 
+test-commit-ref-slug:
+  stage: lint
+  script:
+    - echo CI_COMMIT_REF_SLUG is $CI_COMMIT_REF_SLUG
+
 build-and-publish-buildkitd:
   stage: build-and-publish
   image: docker-registry.wikimedia.org/releng/buildctl:0.10.4-4
