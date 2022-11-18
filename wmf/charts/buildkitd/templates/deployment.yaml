@@ -45,7 +45,8 @@ spec:
             - --tlskey
             - /certs/key.pem
             {{- end }}
-            - --config /etc/buildkit/buildkitd.toml
+            - --config
+            - /etc/buildkit/buildkitd.toml
 
           ports:
             - name: buildkit
