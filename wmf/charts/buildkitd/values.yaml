@@ -89,3 +89,5 @@ cacheStorage:
 
     # The key within the above secret's data that defines the default region
     region:  "region"
+
+insecureRegistries: []
