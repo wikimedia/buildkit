@@ -106,8 +106,8 @@ spec:
             # https://github.com/moby/buildkit/issues/879#issuecomment-1240347038
             - mountPath: /home/user/.local/share/buildkit
               name: buildkitd
-            - name: buildkitdtoml
-              mountPath: /etc/buildkit/buildkitd.toml
+            - name: buildkitd-config
+              mountPath: /etc/buildkit
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
 
@@ -120,7 +120,7 @@ spec:
         {{- end }}
         - name: buildkitd
           emptyDir: {}
-        - name: buildkitdtoml
+        - name: buildkitd-config
           configMap:
             name: {{ include "buildkitd.fullname" . }}
 
