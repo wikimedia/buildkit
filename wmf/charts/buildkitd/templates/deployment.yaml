@@ -45,6 +45,7 @@ spec:
             - --tlskey
             - /certs/key.pem
             {{- end }}
+            - --config /etc/buildkit/buildkitd.toml
 
           ports:
             - name: buildkit
@@ -104,6 +105,8 @@ spec:
             # https://github.com/moby/buildkit/issues/879#issuecomment-1240347038
             - mountPath: /home/user/.local/share/buildkit
               name: buildkitd
+            - name: buildkitdtoml
+              mountPath: /etc/buildkit/buildkitd.toml
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
 
@@ -116,6 +119,9 @@ spec:
         {{- end }}
         - name: buildkitd
           emptyDir: {}
+        - name: buildkitdtoml
+          configMap:
+            name: {{ include "buildkitd.fullname" . }}
 
       {{- with .Values.nodeSelector }}
       nodeSelector:
