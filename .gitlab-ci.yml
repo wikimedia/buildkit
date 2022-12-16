@@ -6,6 +6,10 @@ stages:
   - lint
   - build-and-publish
 
+default:
+  tags:
+    - kubernetes
+
 workflow:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
