@@ -11,3 +11,4 @@ data:
     [registry.{{ . | quote }}]
       http = true
     {{- end }}
+    {{ .Values.buildkitdToml }}
