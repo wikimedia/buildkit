@@ -11,5 +11,6 @@ spec:
       targetPort: buildkit
       protocol: TCP
       name: buildkit
+      appProtocol: tcp
   selector:
     {{- include "buildkitd.selectorLabels" . | nindent 4 }}
