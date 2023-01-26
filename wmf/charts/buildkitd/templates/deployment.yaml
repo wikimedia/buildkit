@@ -49,7 +49,7 @@ spec:
             - /etc/buildkit/buildkitd.toml
 
           ports:
-            - name: grpc
+            - name: buildkit
               containerPort: 1234
               protocol: TCP
 
