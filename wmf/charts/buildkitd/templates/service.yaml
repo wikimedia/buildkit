@@ -8,8 +8,8 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: grpc
+      targetPort: buildkit
       protocol: TCP
-      name: grpc
+      name: buildkit
   selector:
     {{- include "buildkitd.selectorLabels" . | nindent 4 }}
