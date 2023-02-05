@@ -28,6 +28,11 @@ func (c *Client) Build(ctx context.Context, opt SolveOpt, product string, buildF
 		product = apicaps.ExportedProduct
 	}
 
+	err := c.WaitForReady(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	workers, err := c.ListWorkers(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "listing workers for Build")
