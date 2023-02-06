@@ -102,3 +102,6 @@ cacheStorage:
     region:  "region"
 
 insecureRegistries: []
+
+# For full control over buildkitd.toml, use this.
+buildkitdToml: ""
