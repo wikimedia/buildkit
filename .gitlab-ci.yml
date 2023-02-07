@@ -6,12 +6,6 @@ stages:
   - lint
   - build-and-publish
 
-workflow:
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED
-
 build-and-publish-buildkitd:
   stage: build-and-publish
   image: docker-registry.wikimedia.org/releng/buildctl:0.10.4-4
