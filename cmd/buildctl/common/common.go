@@ -90,6 +90,11 @@ func ResolveClient(c *cli.Context) (*client.Client, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout*time.Second)
 	defer cancel()
 
+	waitForReady := c.GlobalInt("wait-for-ready")
+	if waitForReady > 0 {
+		opts = append(opts, client.WithWaitForReady(time.Duration(waitForReady)*time.Second))
+	}
+
 	return client.New(ctx, c.GlobalString("addr"), opts...)
 }
 

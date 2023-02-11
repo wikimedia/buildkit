@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	contentapi "github.com/containerd/containerd/api/services/content/v1"
 	"github.com/containerd/containerd/defaults"
@@ -81,6 +82,9 @@ func New(ctx context.Context, address string, opts ...ClientOpt) (*Client, error
 		}
 		if sd, ok := o.(*withSessionDialer); ok {
 			sessionDialer = sd.dialer
+		}
+		if wui, ok := o.(*withUnaryInterceptor); ok {
+			unary = append(unary, filterInterceptor(wui.UnaryClientInterceptor))
 		}
 	}
 
@@ -272,6 +276,30 @@ func WithSessionDialer(dialer func(context.Context, string, map[string][]string)
 
 type withSessionDialer struct {
 	dialer func(context.Context, string, map[string][]string) (net.Conn, error)
+}
+
+type withUnaryInterceptor struct {
+	grpc.UnaryClientInterceptor
+}
+
+// WithWaitForReady blocks remote calls until the connection has been
+// established and will wait for reconnect when the connection enters a
+// transient failure state.
+//
+// This only applies to certain remote calls, specifically unary calls other
+// than Solve as the given timeout applies to the context of the call itself.
+func WithWaitForReady(timeout time.Duration) ClientOpt {
+	return &withUnaryInterceptor{
+		func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+			if method != "moby.buildkit.v1/Solve" {
+				opts = append(opts, grpc.WaitForReady(true))
+				newCtx, cancel := context.WithTimeout(ctx, timeout)
+				defer cancel()
+				ctx = newCtx
+			}
+			return invoker(ctx, method, req, reply, cc, opts...)
+		},
+	}
 }
 
 func resolveDialer(address string) (func(context.Context, string) (net.Conn, error), error) {

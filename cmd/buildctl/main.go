@@ -86,6 +86,11 @@ func main() {
 			Usage: "timeout backend connection after value seconds",
 			Value: 5,
 		},
+		cli.IntFlag{
+			Name:  "wait-for-ready",
+			Usage: "block RPCs until the connection becomes available or times out in seconds",
+			Value: 0,
+		},
 	}
 
 	app.Commands = []cli.Command{

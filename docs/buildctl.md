@@ -28,6 +28,7 @@ GLOBAL OPTIONS:
    --tlskey value         client key
    --tlsdir value         directory containing CA certificate, client certificate, and client key
    --timeout value        timeout backend connection after value seconds (default: 5)
+   --wait-for-ready secs  block calls upon transient connection failures for up to the given secs
    --help, -h             show help
    --version, -v          print the version
 ```
