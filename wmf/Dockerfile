@@ -1,27 +1,59 @@
 # This Dockerfile is meant to be concatenated with upstream's and then
 # executed in the top-level directory context
 
-# This buildkitd image is intended for rootless mode execution using
-# rootlesskit. It must be run via:
+# This buildkitd image is intended to run either in rootless mode using
+# rootlesskit or as a privileged container.
+#
+# Note that in rootless mode, there will be less isolation between the build
+# container processes that the runc worker spawns and the network namespace
+# they in live under. There is also the possibility of network space
+# collisions (port allocation, etc.).
+#
+# In root mode, a privileged buildkitd container is required for network
+# namespace creation and cgroup management.
+#
+# Example for rootless mode execution:
 #   docker run --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+#
+# Example for root mode:
+#   docker run --privileged
+
 # See https://github.com/moby/buildkit/blob/master/docs/rootless.md
 # See https://phabricator.wikimedia.org/T307810 for a brief evaluation of the
-# attack surface from build processes
-FROM docker-registry.wikimedia.org/bullseye:20221002 AS wmf-production
+# attack surface from build processes in rootless mode.
+#
+FROM docker-registry.wikimedia.org/bullseye:20221002 AS wmf-production-base
 
-ARG BUILDKIT_HOME=/var/lib/buildkit
-ARG BUILDKIT_UID=1000
-
-ARG PACKAGES="ca-certificates wmf-certificates git libcap2-bin runc uidmap"
+ARG PACKAGES="ca-certificates wmf-certificates git libcap2-bin runc uidmap iptables slirp4netns"
+ARG DEBUG_PACKAGES=""
+#ARG DEBUG_PACKAGES="sudo iproute2 strace procps net-tools curl iptables"
 
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt/lists \
     apt-get update && \
-    apt-get install -yqq --no-install-recommends $PACKAGES
+    apt-get install -yqq --no-install-recommends $PACKAGES $DEBUG_PACKAGES
+
+# This buildkitd image is intended to run in rootless mode using rootlesskit.
+#
+# Note that in rootless mode, there will be less isolation between the build
+# container processes that the runc worker spawns and the network namespace
+# they in live under. There is also the possibility of network space
+# collisions (port allocation, etc.).
+#
+# Example for rootless mode execution:
+#   docker run --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+#
+# See https://github.com/moby/buildkit/blob/master/docs/rootless.md
+# See https://phabricator.wikimedia.org/T307810 for a brief evaluation of the
+# attack surface from build processes in rootless mode.
+FROM wmf-production-base AS wmf-production-rootless
+
+ARG BUILDKIT_HOME=/var/lib/buildkit
+ARG BUILDKIT_UID=1000
 
 COPY --from=rootless /usr/bin/buildkitd /usr/bin/buildctl /usr/local/sbin/
 COPY --from=rootless /usr/bin/rootlesskit /usr/local/sbin/
-COPY wmf/entrypoint.sh /usr/local/bin/
+COPY wmf/entrypoint-rootless.sh /usr/local/bin/entrypoint.sh
 
 # Much of this section was adapted from https://github.com/moby/buildkit/blob/v0.10/Dockerfile
 RUN groupadd -r -g $BUILDKIT_UID buildkit \
@@ -43,5 +75,19 @@ ENV HOME $BUILDKIT_HOME
 ENV USER buildkit
 ENV XDG_RUNTIME_DIR=/run/user/$BUILDKIT_UID
 ENV TMPDIR=$BUILDKIT_HOME/.local/tmp
+
+ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
+
+# This buildkitd image requires a privileged container but can offer better
+# process isolation and network isolation (via CNI) between runc
+# worker-spawned processes.
+FROM wmf-production-base AS wmf-production
+
+COPY --from=buildkit-linux /usr/bin/buildkitd /usr/bin/buildctl /usr/local/sbin/
+COPY wmf/entrypoint-privileged.sh /usr/local/bin/entrypoint.sh
+
+# Copy in CNI binaries from cni-plugins stage in upstream Dockerfile
+COPY --link --from=cni-plugins /opt/cni/bin /opt/cni/bin
+COPY hack/fixtures/cni.json /etc/buildkit/cni.json
 
 ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]

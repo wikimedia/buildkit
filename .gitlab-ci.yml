@@ -23,7 +23,14 @@ build-and-publish-buildkitd:
       --opt build-arg:http_proxy="$http_proxy"
       --opt build-arg:https_proxy="$https_proxy"
       --opt build-arg:no_proxy="$no_proxy"
-      --output type=image,name="docker-registry.discovery.wmnet/repos/releng/buildkit:${IMAGE_TAG}",push=true
+      --opt target=wmf-production-rootless
+      --output type=image,name="docker-registry.discovery.wmnet/repos/releng/buildkit:${IMAGE_TAG}-rootless",push=true
+    - wmf/build.sh
+      --opt build-arg:http_proxy="$http_proxy"
+      --opt build-arg:https_proxy="$https_proxy"
+      --opt build-arg:no_proxy="$no_proxy"
+      --opt target=wmf-production-privileged
+      --output type=image,name="docker-registry.discovery.wmnet/repos/releng/buildkit:${IMAGE_TAG}-privileged",push=true
   tags:
     - trusted
   rules:
