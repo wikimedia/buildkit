@@ -81,7 +81,7 @@ ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
 # This buildkitd image requires a privileged container but can offer better
 # process isolation and network isolation (via CNI) between runc
 # worker-spawned processes.
-FROM wmf-production-base AS wmf-production
+FROM wmf-production-base AS wmf-production-privileged
 
 COPY --from=buildkit-linux /usr/bin/buildkitd /usr/bin/buildctl /usr/local/sbin/
 COPY wmf/entrypoint-privileged.sh /usr/local/bin/entrypoint.sh

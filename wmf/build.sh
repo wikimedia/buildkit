@@ -11,5 +11,5 @@ buildctl build \
   --local context=. \
   --local dockerfile="$tmpdir" \
   --opt filename=Dockerfile.wmf \
-  --opt target=wmf-production \
+  --opt target=wmf-production-privileged \
   "$@"
