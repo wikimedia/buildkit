@@ -36,7 +36,6 @@ spec:
           args:
             - --addr
             - tcp://0.0.0.0:1234
-            - --oci-worker-no-process-sandbox
             {{- if .Values.mtls.enabled }}
             - --tlscacert
             - /certs/ca.pem
