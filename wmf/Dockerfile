@@ -1,16 +1,16 @@
 # This Dockerfile is meant to be concatenated with upstream's and then
-# executed in the top-level directory context
+# executed in the top-level directory context.
 
-# This buildkitd image is intended to run either in rootless mode using
-# rootlesskit or as a privileged container.
-#
-# Note that in rootless mode, there will be less isolation between the build
-# container processes that the runc worker spawns and the network namespace
-# they in live under. There is also the possibility of network space
-# collisions (port allocation, etc.).
-#
-# In root mode, a privileged buildkitd container is required for network
-# namespace creation and cgroup management.
+# There are two targets defined:
+# * wmf-production-rootless
+#   Note that in rootless mode, there will be less isolation between the build
+#   container processes that the runc worker spawns and the network namespace
+#   they in live under. There is also the possibility of network space
+#   collisions (port allocation, etc.).
+# 
+# * wmf-production-privileged
+#   In rootfull mode, a privileged buildkitd container is required for network
+#   namespace creation and cgroup management.
 #
 # Example for rootless mode execution:
 #   docker run --security-opt seccomp=unconfined --security-opt apparmor=unconfined
@@ -21,12 +21,13 @@
 # See https://github.com/moby/buildkit/blob/master/docs/rootless.md
 # See https://phabricator.wikimedia.org/T307810 for a brief evaluation of the
 # attack surface from build processes in rootless mode.
-#
+
+
 FROM docker-registry.wikimedia.org/bullseye:20221002 AS wmf-production-base
 
-ARG PACKAGES="ca-certificates wmf-certificates git libcap2-bin runc uidmap iptables slirp4netns"
+ARG PACKAGES="ca-certificates wmf-certificates git libcap2-bin runc uidmap iptables"
 ARG DEBUG_PACKAGES=""
-#ARG DEBUG_PACKAGES="sudo iproute2 strace procps net-tools curl iptables"
+#ARG DEBUG_PACKAGES="iproute2 strace procps net-tools curl"
 
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt/lists \
