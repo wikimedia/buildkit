@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	contentapi "github.com/containerd/containerd/api/services/content/v1"
 	"github.com/containerd/containerd/defaults"
@@ -34,7 +33,6 @@ import (
 type Client struct {
 	conn          *grpc.ClientConn
 	sessionDialer func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error)
-	readyTimeout  *time.Duration
 }
 
 type ClientOpt interface{}
@@ -56,7 +54,6 @@ func New(ctx context.Context, address string, opts ...ClientOpt) (*Client, error
 	var tracerProvider trace.TracerProvider
 	var tracerDelegate TracerDelegate
 	var sessionDialer func(context.Context, string, map[string][]string) (net.Conn, error)
-	var readyTimeout *time.Duration
 
 	for _, o := range opts {
 		if _, ok := o.(*withFailFast); ok {
@@ -84,9 +81,6 @@ func New(ctx context.Context, address string, opts ...ClientOpt) (*Client, error
 		}
 		if sd, ok := o.(*withSessionDialer); ok {
 			sessionDialer = sd.dialer
-		}
-		if rt, ok := o.(*withWaitForReadyTimeout); ok {
-			readyTimeout = rt.timeout
 		}
 	}
 
@@ -157,7 +151,6 @@ func New(ctx context.Context, address string, opts ...ClientOpt) (*Client, error
 	c := &Client{
 		conn:          conn,
 		sessionDialer: sessionDialer,
-		readyTimeout:  readyTimeout,
 	}
 
 	if tracerDelegate != nil {
@@ -279,17 +272,6 @@ func WithSessionDialer(dialer func(context.Context, string, map[string][]string)
 
 type withSessionDialer struct {
 	dialer func(context.Context, string, map[string][]string) (net.Conn, error)
-}
-
-type withWaitForReadyTimeout struct {
-	timeout *time.Duration
-}
-
-// WithWaitForReadyTimeout specifies the maximum number of seconds to wait for
-// the underlying gRPC connection to become available during the preflight
-// request.
-func WithWaitForReadyTimeout(timeout time.Duration) ClientOpt {
-	return &withWaitForReadyTimeout{&timeout}
 }
 
 func resolveDialer(address string) (func(context.Context, string) (net.Conn, error), error) {
