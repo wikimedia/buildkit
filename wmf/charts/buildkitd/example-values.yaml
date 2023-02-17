@@ -1,0 +1,13 @@
+buildkitdToml: |-
+  debug = true
+
+  [worker.oci]
+    enabled = true
+    gc = true
+
+insecureRegistries:
+  - some.example/registry
+
+mtls:
+  enabled: true
+  secretName: mtls-secret

@@ -7,7 +7,7 @@ metadata:
     {{- include "buildkitd.labels" . | nindent 4 }}
 data:
   buildkitd.toml: |
-    {{ .Values.buildkitdToml }}
+    {{- .Values.buildkitdToml | nindent 4 }}
     {{- range .Values.insecureRegistries }}
     [registry.{{ . | quote }}]
       http = true

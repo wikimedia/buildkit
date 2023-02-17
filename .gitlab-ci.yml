@@ -42,7 +42,7 @@ lint-helm-chart:
   variables:
     BUILD_VARIANT: helm-lint
     BUILD_CONFIG: wmf/blubber.yaml
-    RUN_ARGUMENTS: '["wmf/charts/buildkitd"]'
+    RUN_ARGUMENTS: '["-f", "wmf/charts/buildkitd/example-values.yaml", "wmf/charts/buildkitd"]'
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
