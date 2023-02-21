@@ -130,7 +130,6 @@ buildkitdToml: ""
 #   forceAddress: false
 #   ipMasq: true
 #   hairpinMode: true
-#   macspoofchk: true
 #   ipam:
 #     type: host-local
 #     ranges:
