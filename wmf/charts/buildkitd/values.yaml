@@ -23,17 +23,21 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-podAnnotations:
-  container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
-
+podAnnotations: {}
 podSecurityContext: {}
 
-securityContext:
-  seccompProfile:
-    type: Unconfined
-  # To change UID/GID, you need to rebuild the image
-  runAsUser: 1000
-  runAsGroup: 1000
+securityContext: {}
+#  Example settings for rootless mode:
+#
+#  seccompProfile:
+#    type: Unconfined
+#  # To change UID/GID, you need to rebuild the image
+#  runAsUser: 1000
+#  runAsGroup: 1000
+#
+#  Example settings for privileged mode:
+#
+#  privileged: true
 
 service:
   type: ClusterIP
