@@ -12,3 +12,7 @@ data:
     [registry.{{ . | quote }}]
       http = true
     {{- end }}
+  {{- if .Values.cniConfig }}
+  cni.json: |
+    {{- .Values.cniConfig | mustToPrettyJson | nindent 4 }}
+  {{- end }}
