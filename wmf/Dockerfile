@@ -25,7 +25,7 @@
 
 FROM docker-registry.wikimedia.org/bullseye:20221002 AS wmf-production-base
 
-ARG PACKAGES="ca-certificates wmf-certificates git libcap2-bin runc uidmap iptables jq"
+ARG PACKAGES="ca-certificates wmf-certificates git libcap2-bin runc uidmap iptables"
 ARG DEBUG_PACKAGES=""
 #ARG DEBUG_PACKAGES="iproute2 strace procps net-tools curl"
 
