@@ -3,4 +3,4 @@ name: buildkitd
 description: Run buildkitd rootless
 type: application
 version: 0.4.0
-appVersion: "wmf-v0.11-5"
+appVersion: "wmf-v0.11-6"
