@@ -1,0 +1,19 @@
+{{- if .Values.maxConnections }}
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: {{ include "buildkitd.fullname" . }}
+  labels:
+    {{- include "buildkitd.labels" . | nindent 4 }}
+spec:
+  host: buildkitd
+  trafficPolicy:
+    loadBalancer:
+      # Ensure that all requests for a given runner client hit the same
+      # buildkitd instance
+      consistentHash:
+        useSourceIp: true
+    connectionPool:
+      tcp:
+        maxConnections: {{ .Values.maxConnections }}
+{{- end }}

@@ -105,3 +105,6 @@ insecureRegistries: []
 
 # For full control over buildkitd.toml, use this.
 buildkitdToml: ""
+
+# Max connection limit enforced by istio DestinationRule
+# maxConnections:
