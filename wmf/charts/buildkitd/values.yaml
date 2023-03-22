@@ -24,7 +24,6 @@ serviceAccount:
   name: ""
 
 podAnnotations: {}
-
 podSecurityContext: {}
 
 securityContext: {}
