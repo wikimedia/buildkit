@@ -23,21 +23,17 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-podAnnotations: {}
+podAnnotations:
+  container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
+
 podSecurityContext: {}
 
-securityContext: {}
-#  Example settings for rootless mode:
-#
-#  seccompProfile:
-#    type: Unconfined
-#  # To change UID/GID, you need to rebuild the image
-#  runAsUser: 1000
-#  runAsGroup: 1000
-#
-#  Example settings for privileged mode:
-#
-#  privileged: true
+securityContext:
+  seccompProfile:
+    type: Unconfined
+  # To change UID/GID, you need to rebuild the image
+  runAsUser: 1000
+  runAsGroup: 1000
 
 service:
   type: ClusterIP
@@ -108,29 +104,7 @@ cacheStorage:
 insecureRegistries: []
 
 # For full control over buildkitd.toml, use this.
-# See https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md
 buildkitdToml: ""
 
-# Container Network Interface (CNI) configuration to use when the worker
-# `networkMode` (which can be set via buildkitdToml above) is "cni".
-#
-# See https://github.com/moby/buildkit/blob/master/docs/cni-networking.md
-# See https://github.com/moby/buildkit/blob/master/hack/fixtures/cni.json
-# See https://www.cni.dev/plugins/current/main/bridge/
-#
-# The following configuration can be used to isolate build containers in their
-# own network.
-#
-# cniConfig:
-#   cniVersion: 1.0.0
-#   name: buildkit
-#   type: bridge
-#   bridge: buildkit0
-#   isDefaultGateway: true
-#   forceAddress: false
-#   ipMasq: true
-#   hairpinMode: true
-#   ipam:
-#     type: host-local
-#     ranges:
-#     - - subnet: 10.10.0.0/16
+# Max connection limit enforced by istio DestinationRule
+# maxConnections:
