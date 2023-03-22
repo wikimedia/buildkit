@@ -1,0 +1,12 @@
+{{- if .Values.trafficPolicy }}
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: {{ include "buildkitd.fullname" . }}
+  labels:
+    {{- include "buildkitd.labels" . | nindent 4 }}
+spec:
+  host: {{ include "buildkitd.fullname" . }}
+  trafficPolicy: 
+    {{- toYaml .Values.trafficPolicy | nindent 4 }}
+{{- end }}

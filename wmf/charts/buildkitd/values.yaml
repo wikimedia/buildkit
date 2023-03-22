@@ -134,3 +134,13 @@ buildkitdToml: ""
 #     type: host-local
 #     ranges:
 #     - - subnet: 10.10.0.0/16
+# Max connection limit enforced by istio DestinationRule
+# trafficPolicy:
+    # loadBalancer:
+      # Ensure that all requests for a given runner client hit the same
+      # buildkitd instance
+      # consistentHash:
+        # useSourceIp: true
+    # connectionPool:
+      # tcp:
+        # maxConnections: 10
