@@ -143,4 +143,4 @@ buildkitdToml: ""
         # useSourceIp: true
     # connectionPool:
       # tcp:
-        # maxConnections: {{ .Values.maxConnections }}
+        # maxConnections: 10

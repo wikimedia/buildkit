@@ -7,5 +7,6 @@ metadata:
     {{- include "buildkitd.labels" . | nindent 4 }}
 spec:
   host: {{ include "buildkitd.fullname" . }}
-  trafficPolicy: {{ .Values.trafficPolicy }}
+  trafficPolicy: 
+    {{- toYaml .Values.trafficPolicy | nindent 4 }}
 {{- end }}
