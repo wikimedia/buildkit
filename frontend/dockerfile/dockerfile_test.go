@@ -70,6 +70,7 @@ var allTests = integration.TestFuncs(
 	testExportedHistory,
 	testExposeExpansion,
 	testUser,
+	testUserAdditionalGids,
 	testCacheReleased,
 	testDockerignore,
 	testDockerignoreInvalid,
@@ -159,6 +160,7 @@ var allTests = integration.TestFuncs(
 	testNilProvenance,
 	testSBOMScannerArgs,
 	testMultiPlatformWarnings,
+	testNilContextInSolveGateway,
 )
 
 // Tests that depend on the `security.*` entitlements
@@ -417,7 +419,7 @@ RUN [ "$(cat testfile)" == "contents0" ]
 }
 
 func testExportCacheLoop(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport, integration.FeatureCacheImport, integration.FeatureCacheBackendLocal)
 	f := getFrontend(t, sb)
 
 	dockerfile := []byte(`
@@ -3003,6 +3005,43 @@ USER nobody
 	require.Equal(t, "nobody", ociimg.Config.User)
 }
 
+// testUserAdditionalGids ensures that that the primary GID is also included in the additional GID list.
+// CVE-2023-25173: https://github.com/advisories/GHSA-hmfx-3pcx-653p
+func testUserAdditionalGids(t *testing.T, sb integration.Sandbox) {
+	f := getFrontend(t, sb)
+
+	dockerfile := []byte(`
+# Mimics the tests in https://github.com/containerd/containerd/commit/3eda46af12b1deedab3d0802adb2e81cb3521950
+FROM busybox
+SHELL ["/bin/sh", "-euxc"]
+RUN [ "$(id)" = "uid=0(root) gid=0(root) groups=0(root),10(wheel)" ]
+USER 1234
+RUN [ "$(id)" = "uid=1234 gid=0(root) groups=0(root)" ]
+USER 1234:1234
+RUN [ "$(id)" = "uid=1234 gid=1234 groups=1234" ]
+USER daemon
+RUN [ "$(id)" = "uid=1(daemon) gid=1(daemon) groups=1(daemon)" ]
+`)
+
+	dir, err := integration.Tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+	require.NoError(t, err)
+
+	c, err := client.New(sb.Context(), sb.Address())
+	require.NoError(t, err)
+	defer c.Close()
+
+	_, err = f.Solve(sb.Context(), c, client.SolveOpt{
+		LocalDirs: map[string]string{
+			builder.DefaultLocalNameDockerfile: dir,
+			builder.DefaultLocalNameContext:    dir,
+		},
+	}, nil)
+	require.NoError(t, err)
+}
+
 func testCopyChown(t *testing.T, sb integration.Sandbox) {
 	f := getFrontend(t, sb)
 
@@ -3909,7 +3948,12 @@ ONBUILD RUN mkdir -p /out && echo -n 11 >> /out/foo
 }
 
 func testCacheMultiPlatformImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureDirectPush)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureDirectPush,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheBackendInline,
+		integration.FeatureCacheBackendRegistry,
+	)
 	f := getFrontend(t, sb)
 
 	registry, err := sb.NewRegistry()
@@ -4032,7 +4076,7 @@ COPY --from=base arch /
 }
 
 func testCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport, integration.FeatureCacheBackendLocal)
 	f := getFrontend(t, sb)
 
 	registry, err := sb.NewRegistry()
@@ -6518,7 +6562,10 @@ FROM scratch
 COPY --from=0 / /
 `)
 
-	const expectedDigest = "sha256:9e36395384d073e711102b13bd0ba4b779ef6afbaf5cadeb77fe77dba8967d1f"
+	// note that this digest differs from the one in master, due to
+	// commit a89f482dcb3428c0297f39474eebd7de15e4792a not being included
+	// in this branch.
+	const expectedDigest = "sha256:e26093cc8a7524089a1d0136457e6c09a34176e2b2efcf99ac471baa729c7dc9"
 
 	dir, err := integration.Tmpdir(
 		t,
@@ -6560,6 +6607,29 @@ COPY --from=0 / /
 	t.Logf("OCI archive digest=%q", outDigest)
 	t.Log("The digest may change depending on the BuildKit version, the snapshotter configuration, etc.")
 	require.Equal(t, expectedDigest, outDigest)
+}
+
+func testNilContextInSolveGateway(t *testing.T, sb integration.Sandbox) {
+	f := getFrontend(t, sb)
+	c, err := client.New(sb.Context(), sb.Address())
+	require.NoError(t, err)
+	defer c.Close()
+
+	_, err = c.Build(sb.Context(), client.SolveOpt{}, "", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		res, err := f.SolveGateway(ctx, c, gateway.SolveRequest{
+			Frontend: "dockerfile.v0",
+			FrontendInputs: map[string]*pb.Definition{
+				builder.DefaultLocalNameDockerfile: nil,
+				builder.DefaultLocalNameContext:    nil,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return res, nil
+	}, nil)
+	// should not cause buildkitd to panic
+	require.ErrorContains(t, err, "invalid nil input definition to definition op")
 }
 
 func runShell(dir string, cmds ...string) error {

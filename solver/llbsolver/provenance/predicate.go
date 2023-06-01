@@ -7,6 +7,7 @@ import (
 	slsa "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/common"
 	slsa02 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2"
 	"github.com/moby/buildkit/util/purl"
+	"github.com/moby/buildkit/util/urlutil"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/package-url/packageurl-go"
 )
@@ -63,12 +64,15 @@ func slsaMaterials(srcs Sources) ([]slsa.ProvenanceMaterial, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, slsa.ProvenanceMaterial{
+		material := slsa.ProvenanceMaterial{
 			URI: uri,
-			Digest: slsa.DigestSet{
+		}
+		if s.Digest != "" {
+			material.Digest = slsa.DigestSet{
 				s.Digest.Algorithm().String(): s.Digest.Hex(),
-			},
-		})
+			}
+		}
+		out = append(out, material)
 	}
 
 	for _, s := range srcs.Git {
@@ -98,12 +102,16 @@ func slsaMaterials(srcs Sources) ([]slsa.ProvenanceMaterial, error) {
 			})
 		}
 		packageurl.NewPackageURL(packageurl.TypeOCI, "", s.Ref, "", q, "")
-		out = append(out, slsa.ProvenanceMaterial{
+
+		material := slsa.ProvenanceMaterial{
 			URI: s.Ref,
-			Digest: slsa.DigestSet{
+		}
+		if s.Digest != "" {
+			material.Digest = slsa.DigestSet{
 				s.Digest.Algorithm().String(): s.Digest.Hex(),
-			},
-		})
+			}
+		}
+		out = append(out, material)
 	}
 	return out, nil
 }
@@ -151,6 +159,7 @@ func NewPredicate(c *Capture) (*ProvenancePredicate, error) {
 		} else {
 			inv.ConfigSource.URI = v
 		}
+		inv.ConfigSource.URI = urlutil.RedactCredentials(inv.ConfigSource.URI)
 		delete(c.Args, contextKey)
 	}
 
@@ -162,6 +171,9 @@ func NewPredicate(c *Capture) (*ProvenancePredicate, error) {
 	vcs := make(map[string]string)
 	for k, v := range c.Args {
 		if strings.HasPrefix(k, "vcs:") {
+			if k == "vcs:source" {
+				v = urlutil.RedactCredentials(v)
+			}
 			delete(c.Args, k)
 			if v != "" {
 				vcs[strings.TrimPrefix(k, "vcs:")] = v
@@ -231,6 +243,11 @@ func FilterArgs(m map[string]string) map[string]string {
 		"platform":           {},
 		"cache-imports":      {},
 	}
+	const defaultContextKey = "context"
+	contextKey := defaultContextKey
+	if v, ok := m["contextkey"]; ok && v != "" {
+		contextKey = v
+	}
 	out := make(map[string]string)
 	for k, v := range m {
 		if _, ok := hostSpecificArgs[k]; ok {
@@ -238,6 +255,9 @@ func FilterArgs(m map[string]string) map[string]string {
 		}
 		if strings.HasPrefix(k, "attest:") {
 			continue
+		}
+		if k == contextKey || strings.HasPrefix(k, defaultContextKey+":") {
+			v = urlutil.RedactCredentials(v)
 		}
 		out[k] = v
 	}

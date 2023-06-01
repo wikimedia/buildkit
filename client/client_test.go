@@ -62,6 +62,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	spdx "github.com/spdx/tools-golang/spdx/v2_3"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/sync/errgroup"
@@ -189,10 +190,12 @@ func TestIntegration(t *testing.T) {
 		testAttestationBundle,
 		testSBOMScan,
 		testSBOMScanSingleRef,
+		testSBOMSupplements,
 		testMultipleCacheExports,
 		testMountStubsDirectory,
 		testMountStubsTimestamp,
 		testSourcePolicy,
+		testLLBMountPerformance,
 	)
 }
 
@@ -244,7 +247,7 @@ func newContainerd(cdAddress string) (*containerd.Client, error) {
 
 // moby/buildkit#1336
 func testCacheExportCacheKeyLoop(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport, integration.FeatureCacheBackendLocal)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
 	defer c.Close()
@@ -973,7 +976,6 @@ func testSecurityModeErrors(t *testing.T, sb integration.Sandbox) {
 }
 
 func testFrontendImageNaming(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureOCIExporter, integration.FeatureDirectPush)
 	requiresLinux(t)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
@@ -1082,12 +1084,15 @@ func testFrontendImageNaming(t *testing.T, sb integration.Sandbox) {
 
 					switch exp {
 					case ExporterOCI:
+						integration.CheckFeatureCompat(t, sb, integration.FeatureOCIExporter)
 						t.Skip("oci exporter does not support named images")
 					case ExporterDocker:
+						integration.CheckFeatureCompat(t, sb, integration.FeatureOCIExporter)
 						outW, err := os.Create(out)
 						require.NoError(t, err)
 						so.Exports[0].Output = fixedWriteCloser(outW)
 					case ExporterImage:
+						integration.CheckFeatureCompat(t, sb, integration.FeatureDirectPush)
 						imageName = registry + "/" + imageName
 						so.Exports[0].Attrs["push"] = "true"
 					}
@@ -1137,9 +1142,9 @@ func testSecretMounts(t *testing.T, sb integration.Sandbox) {
 	}, nil)
 	require.NoError(t, err)
 
-	// test optional
+	// test optional, mount should not exist when secret not present in SolveOpt
 	st = llb.Image("busybox:latest").
-		Run(llb.Shlex(`echo secret2`), llb.AddSecret("/run/secrets/mysecret2", llb.SecretOptional))
+		Run(llb.Shlex(`test ! -f /run/secrets/mysecret2`), llb.AddSecret("/run/secrets/mysecret2", llb.SecretOptional))
 
 	def, err = st.Marshal(sb.Context())
 	require.NoError(t, err)
@@ -1173,6 +1178,20 @@ func testSecretMounts(t *testing.T, sb integration.Sandbox) {
 	_, err = c.Solve(sb.Context(), def, SolveOpt{
 		Session: []session.Attachable{secretsprovider.FromMap(map[string][]byte{
 			"mysecret": []byte("pw"),
+		})},
+	}, nil)
+	require.NoError(t, err)
+
+	// test empty cert still creates secret file
+	st = llb.Image("busybox:latest").
+		Run(llb.Shlex(`test -f /run/secrets/mysecret5`), llb.AddSecret("/run/secrets/mysecret5", llb.SecretID("mysecret")))
+
+	def, err = st.Marshal(sb.Context())
+	require.NoError(t, err)
+
+	_, err = c.Solve(sb.Context(), def, SolveOpt{
+		Session: []session.Attachable{secretsprovider.FromMap(map[string][]byte{
+			"mysecret": []byte(""),
 		})},
 	}, nil)
 	require.NoError(t, err)
@@ -3732,7 +3751,11 @@ func testBuildPushAndValidate(t *testing.T, sb integration.Sandbox) {
 }
 
 func testStargzLazyRegistryCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheBackendRegistry,
+		integration.FeatureOCIExporter,
+	)
 	requiresLinux(t)
 	cdAddress := sb.ContainerdAddress()
 	if cdAddress == "" || sb.Snapshotter() != "stargz" {
@@ -3792,6 +3815,7 @@ func testStargzLazyRegistryCacheImportExport(t *testing.T, sb integration.Sandbo
 
 	// clear all local state out
 	ensurePruneAll(t, c, sb)
+	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheImport, integration.FeatureDirectPush)
 
 	// stargz layers should be lazy even for executing something on them
 	def, err = baseDef.
@@ -3879,7 +3903,12 @@ func testStargzLazyRegistryCacheImportExport(t *testing.T, sb integration.Sandbo
 }
 
 func testStargzLazyInlineCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheImport,
+		integration.FeatureCacheBackendInline,
+		integration.FeatureCacheBackendRegistry,
+	)
 	requiresLinux(t)
 	cdAddress := sb.ContainerdAddress()
 	if cdAddress == "" || sb.Snapshotter() != "stargz" {
@@ -4294,7 +4323,7 @@ func testLazyImagePush(t *testing.T, sb integration.Sandbox) {
 }
 
 func testZstdLocalCacheExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport, integration.FeatureCacheBackendLocal)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
 	defer c.Close()
@@ -4436,12 +4465,21 @@ func testCacheExportIgnoreError(t *testing.T, sb integration.Sandbox) {
 	for _, ignoreError := range ignoreErrorValues {
 		ignoreErrStr := strconv.FormatBool(ignoreError)
 		for n, test := range tests {
+			n := n
 			require.Equal(t, 1, len(test.Exports))
 			require.Equal(t, 1, len(test.CacheExports))
 			require.NotEmpty(t, test.CacheExports[0].Attrs)
 			test.CacheExports[0].Attrs["ignore-error"] = ignoreErrStr
 			testName := fmt.Sprintf("%s-%s", n, ignoreErrStr)
 			t.Run(testName, func(t *testing.T) {
+				switch n {
+				case "local-ignore-error":
+					integration.CheckFeatureCompat(t, sb, integration.FeatureCacheBackendLocal)
+				case "registry-ignore-error":
+					integration.CheckFeatureCompat(t, sb, integration.FeatureCacheBackendRegistry)
+				case "s3-ignore-error":
+					integration.CheckFeatureCompat(t, sb, integration.FeatureCacheBackendS3)
+				}
 				_, err = c.Solve(sb.Context(), def, SolveOpt{
 					Exports:      test.Exports,
 					CacheExports: test.CacheExports,
@@ -4460,7 +4498,11 @@ func testCacheExportIgnoreError(t *testing.T, sb integration.Sandbox) {
 }
 
 func testUncompressedLocalCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheImport,
+		integration.FeatureCacheBackendLocal,
+	)
 	dir := t.TempDir()
 	im := CacheOptionsEntry{
 		Type: "local",
@@ -4480,7 +4522,11 @@ func testUncompressedLocalCacheImportExport(t *testing.T, sb integration.Sandbox
 }
 
 func testUncompressedRegistryCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheImport,
+		integration.FeatureCacheBackendRegistry,
+	)
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
@@ -4505,7 +4551,11 @@ func testUncompressedRegistryCacheImportExport(t *testing.T, sb integration.Sand
 }
 
 func testZstdLocalCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheImport,
+		integration.FeatureCacheBackendLocal,
+	)
 	dir := t.TempDir()
 	im := CacheOptionsEntry{
 		Type: "local",
@@ -4526,7 +4576,11 @@ func testZstdLocalCacheImportExport(t *testing.T, sb integration.Sandbox) {
 }
 
 func testZstdRegistryCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheImport,
+		integration.FeatureCacheBackendRegistry,
+	)
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
@@ -4614,7 +4668,11 @@ func testBasicCacheImportExport(t *testing.T, sb integration.Sandbox, cacheOptio
 }
 
 func testBasicRegistryCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheImport,
+		integration.FeatureCacheBackendRegistry,
+	)
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
@@ -4631,7 +4689,11 @@ func testBasicRegistryCacheImportExport(t *testing.T, sb integration.Sandbox) {
 }
 
 func testMultipleRegistryCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheImport,
+		integration.FeatureCacheBackendRegistry,
+	)
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
@@ -4654,7 +4716,11 @@ func testMultipleRegistryCacheImportExport(t *testing.T, sb integration.Sandbox)
 }
 
 func testBasicLocalCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheExport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheImport,
+		integration.FeatureCacheBackendLocal,
+	)
 	dir := t.TempDir()
 	im := CacheOptionsEntry{
 		Type: "local",
@@ -4672,7 +4738,11 @@ func testBasicLocalCacheImportExport(t *testing.T, sb integration.Sandbox) {
 }
 
 func testBasicInlineCacheImportExport(t *testing.T, sb integration.Sandbox) {
-	integration.CheckFeatureCompat(t, sb, integration.FeatureDirectPush, integration.FeatureCacheImport)
+	integration.CheckFeatureCompat(t, sb,
+		integration.FeatureDirectPush,
+		integration.FeatureCacheExport,
+		integration.FeatureCacheBackendInline,
+	)
 	requiresLinux(t)
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
@@ -4724,6 +4794,7 @@ func testBasicInlineCacheImportExport(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 
 	ensurePruneAll(t, c, sb)
+	integration.CheckFeatureCompat(t, sb, integration.FeatureCacheImport, integration.FeatureCacheBackendRegistry)
 
 	resp, err = c.Solve(sb.Context(), def, SolveOpt{
 		// specifying inline cache exporter is needed for reproducing containerimage.digest
@@ -5598,6 +5669,7 @@ func testProxyEnv(t *testing.T, sb integration.Sandbox) {
 }
 
 func testMergeOp(t *testing.T, sb integration.Sandbox) {
+	integration.CheckFeatureCompat(t, sb, integration.FeatureMergeDiff)
 	requiresLinux(t)
 
 	c, err := New(sb.Context(), sb.Address())
@@ -5710,7 +5782,7 @@ func testMergeOpCacheMax(t *testing.T, sb integration.Sandbox) {
 
 func testMergeOpCache(t *testing.T, sb integration.Sandbox, mode string) {
 	t.Helper()
-	integration.CheckFeatureCompat(t, sb, integration.FeatureDirectPush)
+	integration.CheckFeatureCompat(t, sb, integration.FeatureDirectPush, integration.FeatureMergeDiff)
 	requiresLinux(t)
 
 	cdAddress := sb.ContainerdAddress()
@@ -7144,11 +7216,13 @@ func testExportAttestations(t *testing.T, sb integration.Sandbox) {
 	requiresLinux(t)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
+	defer c.Close()
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
 	}
+	require.NoError(t, err)
 
 	ps := []ocispecs.Platform{
 		platforms.MustParse("linux/amd64"),
@@ -7464,11 +7538,13 @@ func testAttestationDefaultSubject(t *testing.T, sb integration.Sandbox) {
 	requiresLinux(t)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
+	defer c.Close()
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
 	}
+	require.NoError(t, err)
 
 	ps := []ocispecs.Platform{
 		platforms.MustParse("linux/amd64"),
@@ -7601,11 +7677,13 @@ func testAttestationBundle(t *testing.T, sb integration.Sandbox) {
 	requiresLinux(t)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
+	defer c.Close()
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
 	}
+	require.NoError(t, err)
 
 	ps := []ocispecs.Platform{
 		platforms.MustParse("linux/amd64"),
@@ -7750,11 +7828,13 @@ func testSBOMScan(t *testing.T, sb integration.Sandbox) {
 	requiresLinux(t)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
+	defer c.Close()
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
 	}
+	require.NoError(t, err)
 
 	p := platforms.MustParse("linux/amd64")
 	pk := platforms.Format(p)
@@ -8026,11 +8106,13 @@ func testSBOMScanSingleRef(t *testing.T, sb integration.Sandbox) {
 	requiresLinux(t)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
+	defer c.Close()
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
 	}
+	require.NoError(t, err)
 
 	p := platforms.DefaultSpec()
 	pk := platforms.Format(p)
@@ -8183,6 +8265,156 @@ EOF
 	require.Equal(t, "https://in-toto.io/Statement/v0.1", attest.Type)
 	require.Equal(t, intoto.PredicateSPDX, attest.PredicateType)
 	require.Subset(t, attest.Predicate, map[string]interface{}{"name": "fallback"})
+}
+
+func testSBOMSupplements(t *testing.T, sb integration.Sandbox) {
+	integration.CheckFeatureCompat(t, sb, integration.FeatureDirectPush, integration.FeatureSBOM)
+	requiresLinux(t)
+	c, err := New(sb.Context(), sb.Address())
+	require.NoError(t, err)
+	defer c.Close()
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	p := platforms.MustParse("linux/amd64")
+	pk := platforms.Format(p)
+
+	frontend := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		res := gateway.NewResult()
+
+		// build image
+		st := llb.Scratch().File(
+			llb.Mkfile("/foo", 0600, []byte{}),
+		)
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		r, err := c.Solve(ctx, gateway.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		ref, err := r.SingleRef()
+		if err != nil {
+			return nil, err
+		}
+		_, err = ref.ToState()
+		if err != nil {
+			return nil, err
+		}
+		res.AddRef(pk, ref)
+
+		expPlatforms := &exptypes.Platforms{
+			Platforms: []exptypes.Platform{{ID: pk, Platform: p}},
+		}
+		dt, err := json.Marshal(expPlatforms)
+		if err != nil {
+			return nil, err
+		}
+		res.AddMeta(exptypes.ExporterPlatformsKey, dt)
+
+		// build attestations
+		doc := spdx.Document{
+			SPDXIdentifier: "DOCUMENT",
+			Files: []*spdx.File{
+				{
+					// foo exists...
+					FileSPDXIdentifier: "SPDXRef-File-foo",
+					FileName:           "/foo",
+				},
+				{
+					// ...but bar doesn't
+					FileSPDXIdentifier: "SPDXRef-File-bar",
+					FileName:           "/bar",
+				},
+			},
+		}
+		docBytes, err := json.Marshal(doc)
+		if err != nil {
+			return nil, err
+		}
+		st = llb.Scratch().
+			File(llb.Mkfile("/result.spdx", 0600, docBytes))
+		def, err = st.Marshal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		r, err = c.Solve(ctx, gateway.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		refAttest, err := r.SingleRef()
+		if err != nil {
+			return nil, err
+		}
+		_, err = ref.ToState()
+		if err != nil {
+			return nil, err
+		}
+
+		res.AddAttestation(pk, gateway.Attestation{
+			Kind: gatewaypb.AttestationKindInToto,
+			Ref:  refAttest,
+			Path: "/result.spdx",
+			InToto: result.InTotoAttestation{
+				PredicateType: intoto.PredicateSPDX,
+			},
+			Metadata: map[string][]byte{
+				result.AttestationSBOMCore: []byte("result"),
+			},
+		})
+
+		return res, nil
+	}
+
+	// test the default fallback scanner
+	target := registry + "/buildkit/testsbom:latest"
+	_, err = c.Build(sb.Context(), SolveOpt{
+		FrontendAttrs: map[string]string{
+			"attest:sbom": "",
+		},
+		Exports: []ExportEntry{
+			{
+				Type: ExporterImage,
+				Attrs: map[string]string{
+					"name": target,
+					"push": "true",
+				},
+			},
+		},
+	}, "", frontend, nil)
+	require.NoError(t, err)
+
+	desc, provider, err := contentutil.ProviderFromRef(target)
+	require.NoError(t, err)
+
+	imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(imgs.Images))
+
+	att := imgs.Find("unknown/unknown")
+	attest := struct {
+		intoto.StatementHeader
+		Predicate spdx.Document
+	}{}
+	require.NoError(t, json.Unmarshal(att.LayersRaw[0], &attest))
+	require.Equal(t, "https://in-toto.io/Statement/v0.1", attest.Type)
+	require.Equal(t, intoto.PredicateSPDX, attest.PredicateType)
+
+	require.Equal(t, "DOCUMENT", string(attest.Predicate.SPDXIdentifier))
+	require.Len(t, attest.Predicate.Files, 2)
+	require.Equal(t, attest.Predicate.Files[0].FileName, "/foo")
+	require.Regexp(t, "^layerID: sha256:", attest.Predicate.Files[0].FileComment)
+	require.Equal(t, attest.Predicate.Files[1].FileName, "/bar")
+	require.Empty(t, attest.Predicate.Files[1].FileComment)
 }
 
 func testMultipleCacheExports(t *testing.T, sb integration.Sandbox) {
@@ -8713,4 +8945,32 @@ func testSourcePolicy(t *testing.T, sb integration.Sandbox) {
 		_, err = c.Build(sb.Context(), SolveOpt{}, "", frontend, nil)
 		require.ErrorContains(t, err, sourcepolicy.ErrSourceDenied.Error())
 	})
+}
+
+func testLLBMountPerformance(t *testing.T, sb integration.Sandbox) {
+	c, err := New(sb.Context(), sb.Address())
+	require.NoError(t, err)
+	defer c.Close()
+
+	mntInput := llb.Image("busybox:latest")
+	st := llb.Image("busybox:latest")
+	var mnts []llb.State
+	for i := 0; i < 20; i++ {
+		execSt := st.Run(
+			llb.Args([]string{"true"}),
+		)
+		mnts = append(mnts, mntInput)
+		for j := range mnts {
+			mnts[j] = execSt.AddMount(fmt.Sprintf("/tmp/bin%d", j), mnts[j], llb.SourcePath("/bin"))
+		}
+		st = execSt.Root()
+	}
+
+	def, err := st.Marshal(sb.Context())
+	require.NoError(t, err)
+
+	timeoutCtx, cancel := context.WithTimeout(sb.Context(), time.Minute)
+	defer cancel()
+	_, err = c.Solve(timeoutCtx, def, SolveOpt{}, nil)
+	require.NoError(t, err)
 }

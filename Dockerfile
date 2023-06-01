@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile-upstream:master
 
-ARG RUNC_VERSION=v1.1.4
-ARG CONTAINERD_VERSION=v1.6.14
+ARG RUNC_VERSION=v1.1.5
+ARG CONTAINERD_VERSION=v1.6.18
 # containerd v1.5 for integration tests
-ARG CONTAINERD_ALT_VERSION_15=v1.5.16
+ARG CONTAINERD_ALT_VERSION_15=v1.5.18
 ARG REGISTRY_VERSION=2.8.0
 ARG ROOTLESSKIT_VERSION=v1.0.1
 ARG CNI_VERSION=v1.1.1
@@ -25,7 +25,7 @@ FROM alpine:edge@sha256:c223f84e05c23c0571ce8decefef818864869187e1a3ea47719412e2
 FROM alpine-$TARGETARCH AS alpinebase
 
 # xx is a helper for cross-compilation
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.1.2 AS xx
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.2.1 AS xx
 
 # go base image
 FROM --platform=$BUILDPLATFORM golang:1.19-alpine${ALPINE_VERSION} AS golatest

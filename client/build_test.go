@@ -45,6 +45,7 @@ func TestClientGatewayIntegration(t *testing.T) {
 		testClientGatewayContainerPID1Exit,
 		testClientGatewayContainerMounts,
 		testClientGatewayContainerPID1Tty,
+		testClientGatewayContainerCancelPID1Tty,
 		testClientGatewayContainerExecTty,
 		testClientSlowCacheRootfsRef,
 		testClientGatewayContainerPlatformPATH,
@@ -910,6 +911,77 @@ func testClientGatewayContainerPID1Tty(t *testing.T, sb integration.Sandbox) {
 		var exitError *gatewayapi.ExitError
 		require.ErrorAs(t, err, &exitError)
 		require.Equal(t, uint32(99), exitError.ExitCode)
+
+		return &client.Result{}, err
+	}
+
+	_, err = c.Build(ctx, SolveOpt{}, product, b, nil)
+	require.Error(t, err)
+
+	inputW.Close()
+	inputR.Close()
+
+	checkAllReleasable(t, c, sb, true)
+}
+
+// testClientGatewayContainerCancelPID1Tty is testing that the tty will cleanly
+// shutdown on context cancel
+func testClientGatewayContainerCancelPID1Tty(t *testing.T, sb integration.Sandbox) {
+	requiresLinux(t)
+	ctx := sb.Context()
+
+	c, err := New(ctx, sb.Address())
+	require.NoError(t, err)
+	defer c.Close()
+
+	product := "buildkit_test"
+
+	inputR, inputW := io.Pipe()
+	output := bytes.NewBuffer(nil)
+
+	b := func(ctx context.Context, c client.Client) (*client.Result, error) {
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		st := llb.Image("busybox:latest")
+
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to marshal state")
+		}
+
+		r, err := c.Solve(ctx, client.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to solve")
+		}
+
+		ctr, err := c.NewContainer(ctx, client.NewContainerRequest{
+			Mounts: []client.Mount{{
+				Dest:      "/",
+				MountType: pb.MountType_BIND,
+				Ref:       r.Ref,
+			}},
+		})
+		require.NoError(t, err)
+		defer ctr.Release(ctx)
+
+		prompt := newTestPrompt(ctx, t, inputW, output)
+		pid1, err := ctr.Start(ctx, client.StartRequest{
+			Args:   []string{"sh"},
+			Tty:    true,
+			Stdin:  inputR,
+			Stdout: &nopCloser{output},
+			Stderr: &nopCloser{output},
+			Env:    []string{fmt.Sprintf("PS1=%s", prompt.String())},
+		})
+		require.NoError(t, err)
+		prompt.SendExpect("echo hi", "hi")
+		cancel()
+
+		err = pid1.Wait()
+		require.ErrorIs(t, err, context.Canceled)
 
 		return &client.Result{}, err
 	}
@@ -1991,6 +2063,7 @@ func testClientGatewayContainerSignal(t *testing.T, sb integration.Sandbox) {
 }
 
 func testClientGatewayNilResult(t *testing.T, sb integration.Sandbox) {
+	integration.CheckFeatureCompat(t, sb, integration.FeatureMergeDiff)
 	requiresLinux(t)
 	c, err := New(sb.Context(), sb.Address())
 	require.NoError(t, err)
