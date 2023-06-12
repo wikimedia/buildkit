@@ -18,6 +18,19 @@ root = "/var/lib/buildkit"
 # insecure-entitlements allows insecure entitlements, disabled by default.
 insecure-entitlements = [ "network.host", "security.insecure" ]
 
+# If allowed-frontends is empty, all frontends (e.g, "dockerfile.v0"
+# and "gateway.v0") are allowed.  Otherwise, only those listed are
+# allowed
+allowed-frontends = []
+
+# If allowed-gateway-sources is empty, all gateway sources are allowed.
+# Otherwise, only sources that match the patterns in this list will be
+# allowed.  Patterns are matched using <https://pkg.go.dev/github.com/bmatcuk/doublestar/v4#Match>.
+# Note that implicit references to docker.io should not be used in the patterns since
+# matching occurs on a fully expanded image name (for example "docker/dockerfile" expands
+# to "docker.io/docker/dockerfile").
+allowed-gateway-sources = []
+
 [grpc]
   address = [ "tcp://0.0.0.0:1234" ]
   # debugAddress is address for attaching go profiles and debuggers.

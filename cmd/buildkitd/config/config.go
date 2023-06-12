@@ -26,6 +26,10 @@ type Config struct {
 	DNS *DNSConfig `toml:"dns"`
 
 	History *HistoryConfig `toml:"history"`
+
+	// WMF additions
+	AllowedFrontends      []string `toml:"allowed-frontends"`
+	AllowedGatewaySources []string `toml:"allowed-gateway-sources"`
 }
 
 type GRPCConfig struct {

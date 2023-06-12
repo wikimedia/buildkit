@@ -55,6 +55,8 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+
+	doublestar "github.com/bmatcuk/doublestar/v4" // WMF addition
 )
 
 const (
@@ -62,14 +64,16 @@ const (
 	keyDevel  = "gateway-devel"
 )
 
-func NewGatewayFrontend(w worker.Infos) frontend.Frontend {
+func NewGatewayFrontend(w worker.Infos, allowedSources []string) frontend.Frontend {
 	return &gatewayFrontend{
-		workers: w,
+		workers:        w,
+		allowedSources: allowedSources,
 	}
 }
 
 type gatewayFrontend struct {
-	workers worker.Infos
+	workers        worker.Infos
+	allowedSources []string
 }
 
 func filterPrefix(opts map[string]string, pfx string) map[string]string {
@@ -80,6 +84,27 @@ func filterPrefix(opts map[string]string, pfx string) map[string]string {
 		}
 	}
 	return m
+}
+
+func (gf *gatewayFrontend) checkSourceIsAllowed(source string) error {
+	if len(gf.allowedSources) == 0 {
+		// No source restrictions in place
+		return nil
+	}
+
+	sourceRef, err := reference.ParseNormalizedNamed(source)
+	if err != nil {
+		return err
+	}
+
+	taglessSource := reference.TrimNamed(sourceRef).Name()
+
+	for _, allowedFrontend := range gf.allowedSources {
+		if matched, _ := doublestar.Match(allowedFrontend, taglessSource); matched {
+			return nil
+		}
+	}
+	return errors.Errorf("'%s' is not an allowed gateway frontend", source)
 }
 
 func (gf *gatewayFrontend) Solve(ctx context.Context, llbBridge frontend.FrontendLLBBridge, opts map[string]string, inputs map[string]*opspb.Definition, sid string, sm *session.Manager) (*frontend.Result, error) {
@@ -95,6 +120,11 @@ func (gf *gatewayFrontend) Solve(ctx context.Context, llbBridge frontend.Fronten
 	var readonly bool // TODO: try to switch to read-only by default.
 
 	var frontendDef *opspb.Definition
+
+	err := gf.checkSourceIsAllowed(source)
+	if err != nil {
+		return nil, err
+	}
 
 	if isDevel {
 		devRes, err := llbBridge.Solve(ctx,

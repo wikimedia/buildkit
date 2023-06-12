@@ -647,7 +647,27 @@ func newController(c *cli.Context, cfg *config.Config) (*control.Controller, err
 	}
 	frontends := map[string]frontend.Frontend{}
 	frontends["dockerfile.v0"] = forwarder.NewGatewayForwarder(wc, dockerfile.Build)
-	frontends["gateway.v0"] = gateway.NewGatewayFrontend(wc)
+	frontends["gateway.v0"] = gateway.NewGatewayFrontend(wc, cfg.AllowedGatewaySources)
+
+	// WMF Addition:
+	if len(cfg.AllowedFrontends) > 0 {
+		var frontendIsAllowed = func(desired_frontend string) bool {
+			for _, allowedFrontend := range cfg.AllowedFrontends {
+				if desired_frontend == allowedFrontend {
+					return true
+				}
+			}
+			return false
+		}
+
+		// Remove any frontend that is not in the allowed list.
+		for fe := range frontends {
+			if !frontendIsAllowed(fe) {
+				delete(frontends, fe)
+			}
+		}
+	}
+	// End WMF addition
 
 	cacheStorage, err := bboltcachestorage.NewStore(filepath.Join(cfg.Root, "cache.db"))
 	if err != nil {
