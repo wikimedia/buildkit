@@ -14,6 +14,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.10
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.26.9
 	github.com/aws/smithy-go v1.11.2
+	github.com/bmatcuk/doublestar/v4 v4.6.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.20
 	github.com/containerd/continuity v0.3.0
