@@ -6,6 +6,16 @@ stages:
   - lint
   - build-and-publish
 
+lint:
+  stage: lint
+  extends: .kokkuri:build-image
+  variables:
+    KOKKURI_IMAGE: docker-registry.wikimedia.org/repos/releng/kokkuri:v1.7.0
+    BUILD_CONFIG: hack/dockerfiles/lint.Dockerfile
+    BUILD_VARIANT: ""
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+
 build-and-publish-buildkitd:
   stage: build-and-publish
   image: docker-registry.wikimedia.org/releng/buildctl:0.10.4-4
