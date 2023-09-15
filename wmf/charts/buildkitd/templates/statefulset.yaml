@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "buildkitd.fullname" . }}
   labels:
@@ -107,6 +107,10 @@ spec:
               name: buildkitd
             - name: buildkitd-config
               mountPath: /etc/buildkit
+          {{- if .Values.persistentVolumeClaimStorage.enabled }}
+            - name: buildkitd-storage
+              mountPath: /var/lib/buildkit
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
 
@@ -135,3 +139,17 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if .Values.persistentVolumeClaimStorage.enabled }}
+  {{- if not .Values.persistentVolumeClaimStorage.size }}
+  {{- fail "persistentVolumeClaimStorage.enabled is true but persistentVolumeClaimStorage.size isn't set.  Please fix!" }}
+  {{- end }}
+  volumeClaimTemplates:
+  - metadata:
+      name: buildkitd-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{ .Values.persistentVolumeClaimStorage.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.persistentVolumeClaimStorage.size }}
+  {{- end }}

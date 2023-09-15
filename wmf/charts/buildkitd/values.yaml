@@ -84,8 +84,15 @@ tolerations: []
 
 affinity: {}
 
-cacheStorage:
+# If enabled, a PersistentVolumeClaim will be used to hold /var/lib/buildkit.
+# You must supply a value for persistentVolumeClaimStorage.size!
+persistentVolumeClaimStorage:
+  enabled: false
+  # If blank, the default storage class will be used.
+  storageClassName: ""
+  #size: "20Gi"
 
+cacheStorage:
   # S3 credentials can be provide via a secret. buildctl clients can then do:
   # `--export-cache type=s3,region=eu-west-1,bucket=my_bucket,name=my_image`
   # `--import-cache type=s3,region=eu-west-1,bucket=my_bucket,name=my_image`
