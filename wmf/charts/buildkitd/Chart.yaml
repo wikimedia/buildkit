@@ -1,6 +1,6 @@
 apiVersion: v2
 name: buildkitd
-description: Run buildkitd rootless
+description: Concurrent, cache-efficient, and Dockerfile-agnostic builder toolkit
 type: application
-version: 0.4.0
+version: 0.5.0
 appVersion: "wmf-v0.11-6"
